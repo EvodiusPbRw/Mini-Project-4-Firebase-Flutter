@@ -1,0 +1,98 @@
+#include <FirebaseESP32.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+#include <ESP32Servo.h>
+
+const char* FB_HOST = "YOUR HOST DATABASE URL";
+const char* FB_AUTH = "YOUR AUTH CODE";
+const char* ssid = "UR WIFI NAME";
+const char* password = "UR WIFI PASSWORD";
+
+String path = "/Node1";
+
+DHT dht(32,DHT11);
+Servo servo;
+FirebaseData firebasedata;
+
+void connectWiFi(){
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("Connecting to WiFi..\n");
+  }
+  Serial.println("Connected to the WiFi network");
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+  Firebase.begin(FB_HOST,FB_AUTH); 
+  Firebase.reconnectWiFi(true);
+  Firebase.setReadTimeout(firebasedata, 1000*60);
+  Firebase.setwriteSizeLimit(firebasedata, "tiny");
+}
+
+
+
+void setup() {
+  Serial.begin(9600);
+  WiFi.begin(ssid, password);
+  connectWiFi();
+  dht.begin();
+  servo.attach(33);
+}
+
+void loop() {
+  Serial.println("\n--------------------------------------");
+  
+  float t = dht.readTemperature();
+  if (isnan(t)) {
+    Serial.println("Sensor Gak Kedeteksi");
+    Firebase.setString(firebasedata,path + "/dht", "No Data");
+    Firebase.getFloat(firebasedata, path+ "/dht");
+    Serial.print("Set DHT di Firebase : ");
+    Serial.println(firebasedata.floatData());
+    Firebase.setString(firebasedata,path + "/servo","DEACTIVE");
+    Firebase.getString(firebasedata, path+ "/servo");
+    Serial.println(firebasedata.stringData());
+    delay(2000);
+    return;
+  }
+  
+  Firebase.getString(firebasedata, path + "/button");
+  String buttonValue = firebasedata.stringData();
+
+  Firebase.getString(firebasedata,path + "/servo");
+  String servoValue = firebasedata.stringData();
+
+  Serial.println("");
+  Serial.print("State Button: ");
+  Serial.println(buttonValue);
+  Serial.print("State Servo: ");
+  Serial.println(servoValue);
+  Serial.println("");
+  
+  if(buttonValue.equals("ACTIVE")){
+    Firebase.setFloat(firebasedata,path + "/dht", t);
+    Firebase.getFloat(firebasedata,path + "/dht");
+    Serial.print("Suhu : ");
+    Serial.println(firebasedata.floatData());
+
+    if(servoValue.equals("ACTIVE")){
+      servo.write(90);
+      delay(1000);
+      servo.write(180);
+      delay(1000);
+    }
+  }else{ 
+    Serial.println("");
+    Firebase.setString(firebasedata,path + "/dht", "No Data");
+    Firebase.getString(firebasedata, path + "/dht");
+    Serial.print("State DHT : ");
+    Serial.println(firebasedata.stringData());
+    
+    Firebase.getString(firebasedata, path + "/button");
+    Serial.print("State Button : ");
+    Serial.println(firebasedata.stringData());
+
+    delay(2000);
+  }
+}
